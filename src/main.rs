@@ -1,4 +1,5 @@
 mod app;
+mod audio;
 mod game;
 mod levels;
 mod maze;
@@ -17,7 +18,7 @@ use std::time::{Duration, Instant, SystemTime};
 const FRAME: Duration = Duration::from_millis(50);
 const SNAPSHOT_EVERY: Duration = Duration::from_millis(500);
 
-const HELP: &str = "tessera [--daily] [--level N] [--endless small|medium|large|huge] [--fog] [--watch] [--seed N]
+const HELP: &str = "tessera [--daily] [--level N] [--endless small|medium|large|huge] [--fog] [--watch] [--mute] [--seed N]
 
 Mazes in four dimensions. Every box on screen is one flat slice of the
 maze; the boxes beside and above each other are its neighbours in the
@@ -30,7 +31,8 @@ arrows). In a cell, cyan ◂ ▸ ↔ mark a way through to the slices left and
 right, amber ▴ ▾ ↕ to the slices above and below.
 V (or Tab) turns the maze: any two of the four directions can be the
 slices, six views of the same maze; walking follows the screen.
-H shows the next steps (+10 s), P pauses, R restarts, Esc goes back.
+H shows the next steps (+10 s), P pauses, R restarts, M turns the
+sound off and on, Esc goes back.
 Gamepad: left stick or d-pad walk, right stick or face buttons step
 between slices, the triggers turn the maze, LB hints, Start pauses,
 Back goes back.
@@ -40,6 +42,7 @@ Back goes back.
   --endless SIZE  a new maze: small, medium, large or huge
   --fog           endless mazes in fog: you see only where you have been
   --watch         watch the computer walk the way through
+  --mute          no sound (M in the game; remembered)
   --seed N        fixed random seed for endless and watch mazes
 
 Best times and campaign progress live in ~/.local/share/tessera/state
@@ -68,8 +71,10 @@ fn main() -> io::Result<()> {
         .map(|v| v.parse().unwrap_or_else(|_| fail("--seed takes a number")))
         .unwrap_or_else(|| SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map_or(1, |d| d.as_nanos() as u64));
     let store = store::Store::load();
-    log::info!("start version {} seed {seed} store {store:?}", env!("CARGO_PKG_VERSION"));
-    let mut app = App::new(store, seed);
+    // open audio before the alternate screen, so any ALSA chatter lands above it
+    let audio = audio::Audio::new(store.muted || has("--mute"));
+    log::info!("start version {} seed {seed} audio {} muted {} store {store:?}", env!("CARGO_PKG_VERSION"), audio.available(), audio.muted);
+    let mut app = App::new(store, seed, audio);
     if has("--fog") {
         app.store.fog = true;
     }
@@ -156,6 +161,9 @@ fn key_cmd(app: &App, k: KeyEvent) -> Option<Cmd> {
         return Some(Cmd::Quit);
     }
     let shift = k.modifiers.contains(KeyModifiers::SHIFT);
+    if matches!(k.code, KeyCode::Char('m' | 'M')) {
+        return Some(Cmd::Mute);
+    }
     let ch = match k.code {
         KeyCode::Char(c) => Some(c.to_ascii_lowercase()),
         _ => None,

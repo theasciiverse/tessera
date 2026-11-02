@@ -11,6 +11,7 @@ pub struct Store {
     /// campaign levels solved in a row from the first
     pub solved: usize,
     pub fog: bool,
+    pub muted: bool,
     /// best times in milliseconds, by run key (`campaign-3`, `daily-2026-11-02`, `endless-large`)
     pub best: BTreeMap<String, u64>,
 }
@@ -33,6 +34,7 @@ impl Store {
             match k {
                 "solved" => s.solved = v.parse().unwrap_or(0),
                 "fog" => s.fog = v == "true",
+                "muted" => s.muted = v == "true",
                 _ => {
                     if let (Some(key), Ok(ms)) = (k.strip_prefix("best."), v.parse()) {
                         s.best.insert(key.to_string(), ms);
@@ -45,7 +47,7 @@ impl Store {
 
     pub fn save(&self) {
         let Some(p) = path() else { return };
-        let mut text = format!("solved={}\nfog={}\n", self.solved, self.fog);
+        let mut text = format!("solved={}\nfog={}\nmuted={}\n", self.solved, self.fog, self.muted);
         for (k, ms) in &self.best {
             text.push_str(&format!("best.{k}={ms}\n"));
         }

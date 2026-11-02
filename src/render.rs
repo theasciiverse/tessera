@@ -237,7 +237,7 @@ const HELP: [&[&str]; 2] = [
         "follows the screen.",
         "",
         "H shows the next steps of the way, but adds ten seconds. P pauses,",
-        "R starts the maze over, Esc goes back.",
+        "R starts the maze over, M turns the sound off and on, Esc goes back.",
         "",
         "Fog shows only what you have walked past: two campaign mazes are in",
         "fog, and endless mazes can be.",
@@ -308,7 +308,7 @@ fn play(app: &App, area: Rect, buf: &mut Buffer) {
     } else if app.kind == Kind::Watch {
         center(buf, area, foot, "Watching the way through · N another maze · Esc back", fg(FAINT));
     } else {
-        center(buf, area, foot, "←↑↓→ walk · J L ◂▸ · I K ▴▾ slices · V turn · H hint · P pause · R restart · Esc back", fg(FAINT));
+        center(buf, area, foot, "←↑↓→ walk · J L ◂▸ · I K ▴▾ slices · V turn · H hint · P pause · M sound · Esc back", fg(FAINT));
     }
 
     if app.paused {
@@ -558,7 +558,7 @@ mod tests {
 
     #[test]
     fn draws_a_maze() {
-        let mut app = App::new(crate::store::Store::default(), 3);
+        let mut app = App::new(crate::store::Store::default(), 3, crate::audio::Audio::silent());
         app.start(Kind::Daily("2026-11-02".into()));
         let area = Rect::new(0, 0, 100, 40);
         let mut buf = Buffer::empty(area);
@@ -580,7 +580,7 @@ mod tests {
     #[test]
     #[ignore]
     fn dump() {
-        let mut app = App::new(crate::store::Store::default(), 3);
+        let mut app = App::new(crate::store::Store::default(), 3, crate::audio::Audio::silent());
         app.start(Kind::Campaign(8));
         for _ in 0..6 {
             let r = app.run.as_ref().unwrap();

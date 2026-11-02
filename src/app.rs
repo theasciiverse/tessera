@@ -1,5 +1,6 @@
 //! Screens and what each command does on them.
 
+use crate::audio::{Audio, Sound};
 use crate::game::{fmt_time, Run};
 use crate::levels::{self, CAMPAIGN, ENDLESS};
 use crate::maze::{Dir, Maze};
@@ -41,6 +42,7 @@ pub enum Cmd {
     Fog,
     /// the next view that fits
     Turn,
+    Mute,
     Quit,
 }
 
@@ -50,6 +52,7 @@ pub const TITLE_ITEMS: [&str; 6] = ["Campaign", "Daily maze", "Endless", "Watch"
 const WATCH_STEP: Duration = Duration::from_millis(160);
 
 pub struct App {
+    pub audio: Audio,
     pub screen: Screen,
     pub store: Store,
     pub cursor: usize,
@@ -77,9 +80,10 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(store: Store, seed: u64) -> App {
+    pub fn new(store: Store, seed: u64, audio: Audio) -> App {
         let campaign_cursor = store.solved.min(CAMPAIGN.len() - 1);
         App {
+            audio,
             screen: Screen::Title,
             store,
             cursor: 0,
@@ -186,6 +190,7 @@ impl App {
                     self.watch_next = Instant::now() + WATCH_STEP;
                     if r.finished.is_some() {
                         self.watch_next = Instant::now() + Duration::from_millis(3000);
+                        self.audio.play(Sound::Solved(false));
                     }
                     // turn the maze a third and two thirds of the way in
                     let left = self.watch_path.len();
@@ -203,6 +208,17 @@ impl App {
         if cmd == Cmd::Quit {
             self.quit = true;
             return;
+        }
+        if cmd == Cmd::Mute {
+            self.audio.muted = !self.audio.muted;
+            self.store.muted = self.audio.muted;
+            self.store.save();
+            log::info!("muted {}", self.audio.muted);
+            self.say(if self.audio.muted { "Sound off (M)".into() } else { "Sound on (M)".into() });
+            return;
+        }
+        if self.screen != Screen::Play && matches!(cmd, Cmd::Up | Cmd::Down | Cmd::Left | Cmd::Right | Cmd::Confirm | Cmd::Move(_)) {
+            self.audio.play(Sound::Menu);
         }
         match self.screen {
             Screen::Title => match cmd {
@@ -323,6 +339,12 @@ impl App {
             Cmd::Move(d) => {
                 // d is a direction on screen; the view says which in the maze
                 let went = r.go(VIEWS[self.view].dir(d));
+                let sound = match (went, d.axis()) {
+                    (false, _) => Sound::Wall,
+                    (true, 0 | 1) => Sound::Step,
+                    (true, a) => Sound::Through(a == 2),
+                };
+                self.audio.play(sound);
                 log::debug!("move {} {} pos {:?} moves {}", d.name(), if went { "ok" } else { "wall" }, r.pos, r.moves);
                 if !went && d.axis() >= 2 {
                     let msg = match d {
@@ -340,6 +362,7 @@ impl App {
             Cmd::Hint => {
                 r.hint();
                 log::info!("hint {} at {:?}", r.hints, r.pos);
+                self.audio.play(Sound::Hint);
                 self.say(format!("Hint: +{} s", crate::game::HINT_COST.as_secs()));
             }
             _ => {}
@@ -361,6 +384,7 @@ impl App {
         }
         self.store.save();
         log::info!("solved {key} in {} moves {} hints {} best {best}", fmt_time(t), r.moves, r.hints);
+        self.audio.play(Sound::Solved(best && before.is_some()));
         self.result = Some((best, before));
     }
 
@@ -380,6 +404,7 @@ impl App {
         match next {
             Some(i) => {
                 self.view = i;
+                self.audio.play(Sound::Turn);
                 let v = VIEWS[i];
                 log::info!("view {} ({})", i, v.name());
                 let n = |k: usize| crate::view::AXIS_NAMES[v.0[k]];
@@ -417,7 +442,7 @@ mod tests {
     use super::*;
 
     fn app() -> App {
-        App::new(Store::default(), 1)
+        App::new(Store::default(), 1, Audio::silent())
     }
 
     #[test]
@@ -464,7 +489,7 @@ mod tests {
         let mut a = app();
         a.start(Kind::Daily("2026-11-02".into()));
         let p1 = a.run.as_ref().unwrap().maze.path_to_goal([0; 4]);
-        let mut b = App::new(Store::default(), 999);
+        let mut b = App::new(Store::default(), 999, Audio::silent());
         b.start(Kind::Daily("2026-11-02".into()));
         assert_eq!(p1, b.run.as_ref().unwrap().maze.path_to_goal([0; 4]));
     }

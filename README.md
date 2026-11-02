@@ -46,7 +46,12 @@ cargo run --release -- --help           # everything else
 Arrows or WASD walk inside a slice. J and L step to the slice on the left
 or right, I and K to the slice above or below (Shift with the arrows does
 the same). V or Tab turns the maze. H shows the next steps of the way
-and adds ten seconds. P pauses, R starts over, Esc goes back.
+and adds ten seconds. P pauses, R starts over, M turns the sound off and
+on, Esc goes back.
+
+All its sounds are made as it plays, from simple waves: a tick for each
+step, a chime for stepping through to another slice, a thud at walls.
+On Linux it needs ALSA (libasound2) for sound and libudev for gamepads.
 
 Gamepad: left stick or d-pad walk, right stick or the face buttons step
 between slices, the triggers turn the maze, LB hints, Start pauses, Back

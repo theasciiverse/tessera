@@ -27,9 +27,19 @@ rule: 1.0.0 when everything planned below is in.
 - Watch mode walks 4×4×3×2 mazes and turns them a third and two thirds
   of the way through
 
+## 0.3.0: built
+
+- Sound, all synthesised: soft steps, a two-note chime for stepping
+  through (higher across, lower up and down), a thud at walls, a sweep
+  when the maze turns, a run of notes for a hint, a fanfare when solved
+  and a longer one for a new best
+- M turns the sound off and on anywhere, remembered; `--mute`
+
 ## Next
 
-- Sound: soft steps, a chime for stepping through, a bump at walls
-- A compact view (one row per cell) so the largest mazes fit 80×24
+- A map view for small terminals: one character per cell in half blocks,
+  walls and passages as colour; it cannot carry the marks for the ways
+  through, which is why the full view needs two rows per cell (underlined
+  walls would, but casts lose underline colour)
 - Replay your best run as a ghost beside you
 - Five dimensions as the last campaign chapter
