@@ -47,7 +47,11 @@ Arrows or WASD walk inside a slice. J and L step to the slice on the left
 or right, I and K to the slice above or below (Shift with the arrows does
 the same). V or Tab turns the maze. H shows the next steps of the way
 and adds ten seconds. P pauses, R starts over, M turns the sound off and
-on, Esc goes back.
+on, G hides or shows your best run, Esc goes back.
+
+Beat a campaign maze or the daily one and your run is kept: next time a
+grey `@` walks it beside you, on your clock, so you can see whether you
+are ahead.
 
 All its sounds are made as it plays, from simple waves: a tick for each
 step, a chime for stepping through to another slice, a thud at walls.

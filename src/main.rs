@@ -1,6 +1,7 @@
 mod app;
 mod audio;
 mod game;
+mod ghost;
 mod levels;
 mod maze;
 mod render;
@@ -32,7 +33,7 @@ right, amber ▴ ▾ ↕ to the slices above and below.
 V (or Tab) turns the maze: any two of the four directions can be the
 slices, six views of the same maze; walking follows the screen.
 H shows the next steps (+10 s), P pauses, R restarts, M turns the
-sound off and on, Esc goes back.
+sound off and on, G hides or shows your best run, Esc goes back.
 Gamepad: left stick or d-pad walk, right stick or face buttons step
 between slices, the triggers turn the maze, LB hints, Start pauses,
 Back goes back.
@@ -200,6 +201,7 @@ fn key_cmd(app: &App, k: KeyEvent) -> Option<Cmd> {
         (_, Some('r')) => Some(Cmd::Restart),
         (_, Some('n')) => Some(Cmd::NewMaze),
         (_, Some('v')) | (KeyCode::Tab, _) => Some(Cmd::Turn),
+        (_, Some('g')) => Some(Cmd::Ghost),
         (KeyCode::Enter, _) | (_, Some(' ')) => Some(Cmd::Confirm),
         (KeyCode::Esc | KeyCode::Backspace, _) | (_, Some('q')) => Some(Cmd::Back),
         _ => None,
@@ -344,6 +346,7 @@ fn pad_cmd(app: &App, h: Held) -> Option<Cmd> {
         Held::Button(South) | Held::Stick(Axis::RightStickY, -1) => Some(Cmd::Move(Dir::WPLUS)),
         Held::Button(LeftTrigger) => Some(Cmd::Hint),
         Held::Button(LeftTrigger2 | RightTrigger2) => Some(Cmd::Turn),
+        Held::Button(RightThumb) => Some(Cmd::Ghost),
         Held::Button(RightTrigger) => Some(Cmd::Restart),
         Held::Button(Start) => Some(Cmd::Pause),
         Held::Button(Select) => Some(Cmd::Back),

@@ -6,7 +6,7 @@ bleuje.com/4dmaze). Ours, written from scratch: the 4D maze shown as a
 grid of 2D slices is the genre's way of drawing it; name, controls,
 marks, structure and code are our own, credited "after bleuje's 4D maze".
 
-**Status:** 0.3.0, playable. Own git repo, folder `games/tessera`, private at
+**Status:** 0.4.0, playable. Own git repo, folder `games/tessera`, private at
 github.com/theasciiverse/tessera. What comes next is in `ROADMAP.md`.
 
 ## Model (src/maze.rs)
@@ -50,6 +50,10 @@ axes; `Cmd::Move` carries a screen direction that the app turns with
 - Sound (src/audio.rs) is synthesised like 1D-Pong's: square, triangle
   and noise notes into a rodio mixer; `samples()` is what the tests check.
   Audio opens before the alternate screen so ALSA chatter lands above it
+- Best runs (src/ghost.rs): moves with clock times, kept per campaign and
+  daily key in `<data>/ghosts/<key>`, checked against the maze when
+  loaded. `store::data_dir()` is a temp folder under `cargo test`: tests
+  must never write the player's files (they did before 0.4.0)
 - gilrs reports 3D mice as gamepads; only SDL-mapped pads count,
   `TESSERA_ANY_PAD=1` allows all
 - State in $XDG_DATA_HOME/tessera/state (`%APPDATA%\tessera\state`)

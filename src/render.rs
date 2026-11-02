@@ -25,6 +25,8 @@ const GOAL: Color = Color::Rgb(255, 96, 160);
 const TRAIL: Color = Color::Rgb(70, 150, 95);
 const GHOST: Color = Color::Rgb(105, 115, 110);
 const HINT: Color = Color::Rgb(255, 240, 120);
+/// your best run, replayed
+const BEST: Color = Color::Rgb(170, 150, 235);
 const FOG: Color = Color::Rgb(30, 42, 36);
 const BUMP: Color = Color::Rgb(255, 70, 70);
 const TEXT: Color = Color::Rgb(200, 215, 205);
@@ -239,7 +241,10 @@ const HELP: [&[&str]; 2] = [
         "H shows the next steps of the way, but adds ten seconds. P pauses,",
         "R starts the maze over, M turns the sound off and on, Esc goes back.",
         "",
-        "Fog shows only what you have walked past: two campaign mazes are in",
+        "Beat a campaign or daily maze and your run is kept: next time a grey",
+        "@ walks it beside you on your clock. G hides it or shows it.",
+        "",
+        "Fog shows only what you have walked past; two campaign mazes are in",
         "fog, and endless mazes can be.",
         "",
         "Gamepad: left stick or d-pad walk, right stick or the face buttons",
@@ -263,7 +268,8 @@ fn help(app: &App, area: Rect, buf: &mut Buffer) {
 fn play(app: &App, area: Rect, buf: &mut Buffer) {
     let Some(r) = &app.run else { return };
     let view = app.view();
-    let sh = Shown { r, v: view };
+    let ghost = app.ghost.as_ref().filter(|_| app.show_ghost).map(|g| g.pos);
+    let sh = Shown { r, v: view, ghost };
     let dims = sh.dims();
     let (nw, nh) = needed(dims);
     if area.width < nw || area.height < nh {
@@ -284,6 +290,9 @@ fn play(app: &App, area: Rect, buf: &mut Buffer) {
     let mut right = format!("{}   {} move{}", fmt_time(r.elapsed()), r.moves, if r.moves == 1 { "" } else { "s" });
     if r.hints > 0 {
         right.push_str(&format!("   {} hint{}", r.hints, if r.hints == 1 { "" } else { "s" }));
+    }
+    if let Some(g) = app.ghost.as_ref().filter(|_| app.show_ghost) {
+        right = format!("best {}   {right}", fmt_ms(g.total));
     }
     let rw = right.chars().count() as u16;
     put(buf, area.right().saturating_sub(rw + 1), status_y, &right, fg(if r.started { TEXT } else { FAINT }));
@@ -390,6 +399,8 @@ fn corner(u: bool, d: bool, l: bool, r: bool) -> &'static str {
 struct Shown<'a> {
     r: &'a Run,
     v: View,
+    /// where your best run is now, in the maze
+    ghost: Option<Pos>,
 }
 
 impl Shown<'_> {
@@ -416,6 +427,9 @@ impl Shown<'_> {
     }
     fn trail(&self, q: Pos) -> bool {
         self.r.trail[self.index(q)]
+    }
+    fn ghost_at(&self, q: Pos) -> bool {
+        self.ghost.is_some_and(|g| self.v.to_screen(g) == q)
     }
     fn hinted(&self, q: Pos) -> bool {
         let p = self.v.to_maze(q);
@@ -481,6 +495,10 @@ fn slice(sh: &Shown, z: usize, w: usize, sx: u16, sy: u16, buf: &mut Buffer) {
 fn cell(sh: &Shown, q: Pos, cx: u16, row: u16, buf: &mut Buffer, here: bool) {
     if !sh.seen(q) {
         put(buf, cx, row, "░░░", fg(FOG));
+        // your best run walks through the fog: you found that way once
+        if sh.ghost_at(q) {
+            put(buf, cx + 1, row, "@", fg(BEST));
+        }
         return;
     }
     let dim = |c: Color| if here { c } else { blend(c, BG, 0.45) };
@@ -511,6 +529,8 @@ fn cell(sh: &Shown, q: Pos, cx: u16, row: u16, buf: &mut Buffer, here: bool) {
     let ghost = !here && q[0] == me[0] && q[1] == me[1];
     let (ch, st) = if q == me {
         ("@", fg(ME).add_modifier(Modifier::BOLD))
+    } else if sh.ghost_at(q) {
+        ("@", fg(if here { BEST } else { blend(BEST, BG, 0.6) }))
     } else if sh.hinted(q) {
         ("•", fg(HINT).add_modifier(Modifier::BOLD))
     } else if q == sh.goal() {
@@ -596,6 +616,15 @@ mod tests {
         for d in path {
             app.apply(crate::app::Cmd::Move(d));
         }
+        println!("{}", text(&app, 100, 40));
+        // the run just made is now a ghost; one step in, it is already home
+        app.apply(crate::app::Cmd::Restart);
+        let first = {
+            let r = app.run.as_ref().unwrap();
+            r.maze.path_to_goal(r.pos)[0]
+        };
+        app.apply(crate::app::Cmd::Move(first));
+        app.tick();
         println!("{}", text(&app, 100, 40));
         app.screen = Screen::Campaign;
         println!("{}", text(&app, 100, 30));

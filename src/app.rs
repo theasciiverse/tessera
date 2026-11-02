@@ -2,6 +2,7 @@
 
 use crate::audio::{Audio, Sound};
 use crate::game::{fmt_time, Run};
+use crate::ghost::{self, Ghost};
 use crate::levels::{self, CAMPAIGN, ENDLESS};
 use crate::maze::{Dir, Maze};
 use crate::store::Store;
@@ -43,6 +44,7 @@ pub enum Cmd {
     /// the next view that fits
     Turn,
     Mute,
+    Ghost,
     Quit,
 }
 
@@ -60,6 +62,10 @@ pub struct App {
     pub campaign_cursor: usize,
     pub endless_cursor: usize,
     pub run: Option<Run>,
+    /// your best run on this maze, replayed beside you
+    pub ghost: Option<Ghost>,
+    /// whether to show it (G)
+    pub show_ghost: bool,
     pub kind: Kind,
     pub paused: bool,
     pub quit: bool,
@@ -91,6 +97,8 @@ impl App {
             campaign_cursor,
             endless_cursor: 1,
             run: None,
+            ghost: None,
+            show_ghost: true,
             kind: Kind::Watch,
             paused: false,
             quit: false,
@@ -148,6 +156,7 @@ impl App {
         self.run = Some(Run::new(maze, fog));
         self.kind = kind;
         self.view = 0;
+        self.load_ghost();
         self.paused = false;
         self.result = None;
         self.message = None;
@@ -167,6 +176,18 @@ impl App {
         self.run = Some(Run::new(maze, fog));
         self.paused = false;
         self.result = None;
+        self.load_ghost();
+    }
+
+    fn load_ghost(&mut self) {
+        let key = self.key();
+        self.ghost = match &self.run {
+            Some(r) if ghost::keeps(&key) => ghost::load(&key, &r.maze),
+            _ => None,
+        };
+        if let Some(g) = &self.ghost {
+            log::info!("ghost for {key}: {} moves, {}", g.progress().1, crate::game::fmt_ms(g.total));
+        }
     }
 
     pub fn tick(&mut self) {
@@ -176,6 +197,12 @@ impl App {
         if let Some(r) = &mut self.run {
             if r.hint.as_ref().is_some_and(|(_, until)| Instant::now() >= *until) {
                 r.hint = None;
+            }
+            // the ghost keeps to your clock, and waits for your first step
+            if let Some(g) = &mut self.ghost {
+                if r.started {
+                    g.advance(&r.maze, r.elapsed().as_millis() as u64);
+                }
             }
         }
         if self.screen == Screen::Play && self.kind == Kind::Watch && !self.paused && Instant::now() >= self.watch_next {
@@ -306,6 +333,17 @@ impl App {
             }
             Cmd::Restart => return self.restart(),
             Cmd::Turn => return self.turn(),
+            Cmd::Ghost => {
+                if self.ghost.is_some() {
+                    self.show_ghost = !self.show_ghost;
+                    self.say(if self.show_ghost { "Your best run is shown (G)".into() } else { "Your best run is hidden (G)".into() });
+                } else if ghost::keeps(&self.key()) {
+                    self.say("No best run on this maze yet".into());
+                } else {
+                    self.say("Endless mazes are new every time: no best run to show".into());
+                }
+                return;
+            }
             Cmd::NewMaze => {
                 if let Kind::Endless(_) | Kind::Watch = self.kind {
                     let k = self.kind.clone();
@@ -376,6 +414,12 @@ impl App {
         let key = self.key();
         let before = self.store.best.get(&key).copied();
         let best = self.store.record(&key, ms);
+        if best && ghost::keeps(&key) {
+            ghost::save(&key, &r.log, ms);
+            if key.starts_with("daily-") {
+                ghost::prune_dailies(&key);
+            }
+        }
         if let Kind::Campaign(i) = self.kind {
             if i + 1 > self.store.solved {
                 self.store.solved = i + 1;
@@ -460,6 +504,25 @@ mod tests {
         assert_eq!(a.store.solved, 1);
         a.apply(Cmd::Confirm);
         assert_eq!(a.kind, Kind::Campaign(1));
+    }
+
+    #[test]
+    fn a_new_best_leaves_a_ghost_that_walks_beside_you() {
+        let mut a = app();
+        let day = "2026-11-02";
+        a.start(Kind::Daily(day.into()));
+        let path = {
+            let r = a.run.as_ref().unwrap();
+            r.maze.path_to_goal(r.pos)
+        };
+        for d in path {
+            a.apply(Cmd::Move(d));
+        }
+        assert_eq!(a.result.map(|r| r.0), Some(true));
+        a.apply(Cmd::Restart);
+        let g = a.ghost.as_ref().expect("the run came back as a ghost");
+        assert_eq!(g.pos, a.run.as_ref().unwrap().maze.start);
+        assert!(g.progress().1 > 0);
     }
 
     #[test]

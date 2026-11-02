@@ -50,6 +50,8 @@ pub struct Run {
     pub bump: Option<(Pos, Dir, Instant)>,
     /// cells a hint is showing, until when
     pub hint: Option<(Vec<Pos>, Instant)>,
+    /// every move that went through, with the clock time it was made at
+    pub log: Vec<(u64, Dir)>,
 }
 
 impl Run {
@@ -68,6 +70,7 @@ impl Run {
             finished: None,
             bump: None,
             hint: None,
+            log: Vec::new(),
         };
         r.look();
         r
@@ -100,6 +103,7 @@ impl Run {
                 }
                 self.pos = n;
                 self.moves += 1;
+                self.log.push((self.clock.elapsed().as_millis() as u64, d));
                 self.bump = None;
                 self.look();
                 if self.pos == self.maze.goal {

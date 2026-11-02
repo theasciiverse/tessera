@@ -16,12 +16,21 @@ pub struct Store {
     pub best: BTreeMap<String, u64>,
 }
 
-fn path() -> Option<PathBuf> {
+/// Where Tessera keeps its files. Tests get a folder of their own under
+/// the system's temp folder, never the player's.
+pub fn data_dir() -> Option<PathBuf> {
+    if cfg!(test) {
+        return Some(std::env::temp_dir().join(format!("tessera-test-{}", std::process::id())));
+    }
     let env = |k: &str| std::env::var_os(k).filter(|v| !v.is_empty()).map(PathBuf::from);
     let base = env("XDG_DATA_HOME")
         .or_else(|| if cfg!(windows) { env("APPDATA") } else { None })
         .or_else(|| env("HOME").map(|h| h.join(".local/share")))?;
-    Some(base.join("tessera").join("state"))
+    Some(base.join("tessera"))
+}
+
+fn path() -> Option<PathBuf> {
+    Some(data_dir()?.join("state"))
 }
 
 impl Store {

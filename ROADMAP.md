@@ -35,11 +35,19 @@ rule: 1.0.0 when everything planned below is in.
   and a longer one for a new best
 - M turns the sound off and on anywhere, remembered; `--mute`
 
+## 0.4.0: built
+
+- Race your best run: a new best on a campaign or daily maze keeps the
+  run, and next time it walks beside you as a grey @ on your clock,
+  through fog too; the status line shows the time to beat; G hides or
+  shows it. A kept run that does not walk its maze is dropped; only
+  today's daily run is kept
+- Tests keep their files in a folder of their own, never the player's
+
 ## Next
 
 - A map view for small terminals: one character per cell in half blocks,
   walls and passages as colour; it cannot carry the marks for the ways
   through, which is why the full view needs two rows per cell (underlined
   walls would, but casts lose underline colour)
-- Replay your best run as a ghost beside you
 - Five dimensions as the last campaign chapter
