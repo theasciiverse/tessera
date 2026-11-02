@@ -4,7 +4,7 @@ Tessera, mazes in four dimensions (David, 2026-11-02: "4D Maze for the
 terminal", after bleuje's browser 4D maze). Versions follow the house
 rule: 1.0.0 when everything planned below is in.
 
-## 0.1.0: the maze (2026-11-02)
+## 0.1.0: built
 
 - Four-dimensional mazes grown as a weighted growing tree (passages inside
   a slice three times as likely as between slices), the longest way of 48
