@@ -357,3 +357,79 @@ fn pad_cmd(app: &App, h: Held) -> Option<Cmd> {
         _ => None,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::crossterm::event::KeyEventState;
+
+    fn key(code: KeyCode, mods: KeyModifiers) -> KeyEvent {
+        KeyEvent { code, modifiers: mods, kind: KeyEventKind::Press, state: KeyEventState::NONE }
+    }
+
+    fn playing() -> App {
+        let mut a = App::new(store::Store::default(), 1, audio::Audio::silent());
+        a.start(Kind::Campaign(0));
+        a
+    }
+
+    #[test]
+    fn walking_and_stepping_through() {
+        let a = playing();
+        let k = |c| key_cmd(&a, key(c, KeyModifiers::NONE));
+        assert_eq!(k(KeyCode::Left), Some(Cmd::Move(Dir::LEFT)));
+        assert_eq!(k(KeyCode::Char('d')), Some(Cmd::Move(Dir::RIGHT)));
+        assert_eq!(k(KeyCode::Char('W')), Some(Cmd::Move(Dir::UP)));
+        assert_eq!(k(KeyCode::Char('j')), Some(Cmd::Move(Dir::ZMINUS)));
+        assert_eq!(k(KeyCode::Char('l')), Some(Cmd::Move(Dir::ZPLUS)));
+        assert_eq!(k(KeyCode::Char('i')), Some(Cmd::Move(Dir::WMINUS)));
+        assert_eq!(k(KeyCode::Char('k')), Some(Cmd::Move(Dir::WPLUS)));
+        assert_eq!(k(KeyCode::Char('v')), Some(Cmd::Turn));
+        assert_eq!(k(KeyCode::Tab), Some(Cmd::Turn));
+        assert_eq!(k(KeyCode::Char('g')), Some(Cmd::Ghost));
+        assert_eq!(k(KeyCode::Esc), Some(Cmd::Back));
+    }
+
+    #[test]
+    fn shift_arrows_step_between_slices() {
+        let a = playing();
+        let k = |c| key_cmd(&a, key(c, KeyModifiers::SHIFT));
+        assert_eq!(k(KeyCode::Right), Some(Cmd::Move(Dir::ZPLUS)));
+        assert_eq!(k(KeyCode::Up), Some(Cmd::Move(Dir::WMINUS)));
+    }
+
+    #[test]
+    fn menus_quit_mute_and_releases() {
+        let a = App::new(store::Store::default(), 1, audio::Audio::silent());
+        assert_eq!(key_cmd(&a, key(KeyCode::Char('q'), KeyModifiers::NONE)), Some(Cmd::Quit));
+        assert_eq!(key_cmd(&a, key(KeyCode::Char('j'), KeyModifiers::NONE)), Some(Cmd::Down));
+        assert_eq!(key_cmd(&a, key(KeyCode::Char('m'), KeyModifiers::NONE)), Some(Cmd::Mute));
+        assert_eq!(key_cmd(&a, key(KeyCode::Char('c'), KeyModifiers::CONTROL)), Some(Cmd::Quit));
+        let mut up = key(KeyCode::Down, KeyModifiers::NONE);
+        up.kind = KeyEventKind::Release;
+        assert_eq!(key_cmd(&a, up), None);
+        // in a maze, q goes back rather than quitting
+        let p = playing();
+        assert_eq!(key_cmd(&p, key(KeyCode::Char('q'), KeyModifiers::NONE)), Some(Cmd::Back));
+        assert_eq!(key_cmd(&p, key(KeyCode::Char('m'), KeyModifiers::NONE)), Some(Cmd::Mute));
+    }
+
+    #[cfg(feature = "gamepad")]
+    #[test]
+    fn the_pad_in_a_maze_and_on_the_overlay() {
+        use gilrs::{Axis, Button::*};
+        let a = playing();
+        assert_eq!(pad_cmd(&a, Held::Button(DPadLeft)), Some(Cmd::Move(Dir::LEFT)));
+        assert_eq!(pad_cmd(&a, Held::Stick(Axis::LeftStickY, 1)), Some(Cmd::Move(Dir::UP)));
+        assert_eq!(pad_cmd(&a, Held::Button(East)), Some(Cmd::Move(Dir::ZPLUS)));
+        assert_eq!(pad_cmd(&a, Held::Stick(Axis::RightStickY, -1)), Some(Cmd::Move(Dir::WPLUS)));
+        assert_eq!(pad_cmd(&a, Held::Button(RightTrigger2)), Some(Cmd::Turn));
+        let mut paused = playing();
+        paused.apply(Cmd::Pause);
+        // on the pause overlay South confirms (goes on) rather than walking
+        assert_eq!(pad_cmd(&paused, Held::Button(South)), Some(Cmd::Confirm));
+        let title = App::new(store::Store::default(), 1, audio::Audio::silent());
+        assert_eq!(pad_cmd(&title, Held::Button(South)), Some(Cmd::Confirm));
+        assert_eq!(pad_cmd(&title, Held::Button(East)), Some(Cmd::Back));
+    }
+}
