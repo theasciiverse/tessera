@@ -420,6 +420,10 @@ impl App {
                 ghost::prune_dailies(&key);
             }
         }
+        if let Kind::Daily(d) = &self.kind {
+            let d = d.clone();
+            self.store.daily_solved(&d);
+        }
         if let Kind::Campaign(i) = self.kind {
             if i + 1 > self.store.solved {
                 self.store.solved = i + 1;

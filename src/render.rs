@@ -131,17 +131,22 @@ fn title(app: &App, area: Rect, buf: &mut Buffer) {
     logo(buf, area, top);
     center(buf, area, top + 6, "mazes in four dimensions", fg(FAINT));
     let solved = app.store.solved.min(CAMPAIGN.len());
+    let streak = app.store.streak_now(&app.today);
     let daily_best = app.store.best.get(&format!("daily-{}", app.today)).map(|&ms| format!("best {}", fmt_ms(ms)));
+    let daily_best = match (daily_best, streak) {
+        (b, n) if n >= 2 => Some(format!("{}{n} days running", b.map(|b| b + " · ").unwrap_or_default())),
+        (b, _) => b,
+    };
     for (i, item) in TITLE_ITEMS.iter().enumerate() {
         let extra = match i {
             0 => format!("{solved}/{}", CAMPAIGN.len()),
             1 => format!("{}  {}", app.today, daily_best.clone().unwrap_or_default()),
             _ => String::new(),
         };
-        let line = format!("{item:<12} {extra:<24}");
+        let line = format!("{item:<12} {extra:<40}");
         let sel = i == app.cursor;
         let st = if sel { Style::default().fg(BG).bg(AMBER).add_modifier(Modifier::BOLD) } else { fg(TEXT) };
-        let x = area.x + area.width.saturating_sub(40) / 2;
+        let x = area.x + area.width.saturating_sub(56) / 2;
         put(buf, x, top + 9 + i as u16, if sel { "▶ " } else { "  " }, fg(AMBER));
         put(buf, x + 2, top + 9 + i as u16, &line, st);
     }

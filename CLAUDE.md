@@ -6,7 +6,7 @@ bleuje.com/4dmaze). Ours, written from scratch: the 4D maze shown as a
 grid of 2D slices is the genre's way of drawing it; name, controls,
 marks, structure and code are our own, credited "after bleuje's 4D maze".
 
-**Status:** 0.4.0, playable. Own git repo, folder `games/tessera`, private at
+**Status:** 0.5.0, playable. Own git repo, folder `games/tessera`, private at
 github.com/theasciiverse/tessera. What comes next is in `ROADMAP.md`.
 
 ## Model (src/maze.rs)
@@ -21,6 +21,15 @@ github.com/theasciiverse/tessera. What comes next is in `ROADMAP.md`.
 - Seeds: campaign `hash("tessera-campaign-N")`, daily
   `hash("tessera-daily-YYYY-MM-DD")` (UTC), endless and watch from the
   clock or `--seed`
+
+## Campaign curve (2026-11-02, `cargo test campaign_curve -- --ignored --nocapture`)
+
+Path length, forks on the way (cells with a side passage) and steps
+through to other slices, level by level: 19/4/3, 28/6/8, 26/7/6, 20/5/6,
+30/7/8, 35/9/11, 46/16/14, 45/9/13, 40/10/12 (fog), 48/16/8, 47/14/13,
+58/14/22 (fog). "The square" (4) is easier than 3 on purpose: the first
+maze with both extra axes. Changing the generator changes every maze:
+rerun this and re-check the curve.
 
 ## Drawing (src/render.rs)
 

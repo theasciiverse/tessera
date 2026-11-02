@@ -44,6 +44,13 @@ rule: 1.0.0 when everything planned below is in.
   today's daily run is kept
 - Tests keep their files in a folder of their own, never the player's
 
+## 0.5.0: built
+
+- The daily streak: solve the daily maze on days in a row and the title
+  counts them ("4 days running"); a missed day starts it over
+- The campaign's difficulty curve measured (path, forks, steps through
+  per level; `cargo test campaign_curve -- --ignored --nocapture`)
+
 ## Next
 
 - A map view for small terminals: one character per cell in half blocks,
