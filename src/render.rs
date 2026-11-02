@@ -281,7 +281,15 @@ fn play(app: &App, area: Rect, buf: &mut Buffer) {
         let mid = area.y + area.height / 2;
         center(buf, area, mid.saturating_sub(1), &format!("This maze needs a {nw}×{nh} terminal"), fg(AMBER));
         center(buf, area, mid, &format!("(now {}×{}); make the window bigger", area.width, area.height), fg(TEXT));
-        center(buf, area, mid + 1, "Esc goes back", fg(FAINT));
+        // another view of the same maze may fit
+        let other = crate::view::VIEWS.iter().any(|v| {
+            let (w, h) = needed(v.dims(r.maze.dims));
+            *v != view && w <= area.width && h <= area.height
+        });
+        if other {
+            center(buf, area, mid + 1, "or press V to turn it to a view that fits", fg(AMBER));
+        }
+        center(buf, area, mid + 2, "Esc goes back", fg(FAINT));
         return;
     }
     // status line
@@ -322,7 +330,10 @@ fn play(app: &App, area: Rect, buf: &mut Buffer) {
     } else if app.kind == Kind::Watch {
         center(buf, area, foot, "Watching the way through · N another maze · Esc back", fg(FAINT));
     } else {
-        center(buf, area, foot, "←↑↓→ walk · J L ◂▸ · I K ▴▾ slices · V turn · H hint · P pause · M sound · Esc back", fg(FAINT));
+        let long = "←↑↓→ walk · J L ◂▸ · I K ▴▾ slices · V turn · H hint · P pause · M sound · Esc back";
+        let short = "←↑↓→ walk · JL ◂▸ IK ▴▾ slices · V turn · H hint · P pause · Esc back";
+        let keys = if long.chars().count() as u16 <= area.width { long } else { short };
+        center(buf, area, foot, keys, fg(FAINT));
     }
 
     if app.paused {
@@ -647,5 +658,65 @@ mod tests {
             assert!(page.len() <= 19, "a help page has {} lines", page.len());
             assert!(page.iter().all(|l| l.chars().count() <= 72));
         }
+    }
+
+    /// Random commands on every screen, drawn at random sizes: nothing may
+    /// panic, and you never leave the grid or pass a wall.
+    #[test]
+    fn random_play_never_breaks() {
+        use crate::app::Cmd;
+        use crate::maze::Dir;
+        let cmds = [
+            Cmd::Up, Cmd::Down, Cmd::Left, Cmd::Right, Cmd::Confirm, Cmd::Back, Cmd::Pause, Cmd::Hint,
+            Cmd::Restart, Cmd::NewMaze, Cmd::Fog, Cmd::Turn, Cmd::Ghost,
+        ];
+        let mut rng = crate::rng::Rng::new(2026);
+        let mut app = App::new(crate::store::Store::default(), 5, crate::audio::Audio::silent());
+        let mut seen = std::collections::HashMap::new();
+        for step in 0..20_000 {
+            *seen.entry(format!("{:?}", app.screen)).or_insert(0) += 1;
+            let roll = rng.below(100);
+            let cmd = if roll < 55 {
+                Cmd::Move(Dir(rng.below(8) as u8))
+            } else {
+                cmds[rng.below(cmds.len())]
+            };
+            let before = app.run.as_ref().map(|r| (r.pos, r.maze.dims));
+            app.apply(cmd);
+            app.tick();
+            if let (Some((p, dims)), Some(r), Cmd::Move(_)) = (before, app.run.as_ref(), cmd) {
+                if r.maze.dims == dims && r.pos != p {
+                    assert!((0..4).all(|k| r.pos[k] < dims[k]), "off the grid");
+                    let moved = Dir::ALL.iter().any(|&d| r.maze.step(p, d) == Some(r.pos));
+                    assert!(moved, "stepped through a wall at step {step}");
+                }
+            }
+            if step % 7 == 0 {
+                let w = 1 + rng.below(160) as u16;
+                let h = 1 + rng.below(60) as u16;
+                app.term = (w, h);
+                let area = Rect::new(0, 0, w, h);
+                let mut buf = Buffer::empty(area);
+                draw(&app, area, &mut buf);
+            }
+            if app.quit {
+                app.quit = false;
+            }
+        }
+        println!("screens {seen:?}");
+        for s in ["Title", "Campaign", "Endless", "Help", "Play"] {
+            assert!(seen.get(s).copied().unwrap_or(0) > 50, "{s} hardly visited: {seen:?}");
+        }
+    }
+
+    #[test]
+    fn the_key_line_fits_eighty_columns() {
+        let mut app = App::new(crate::store::Store::default(), 3, crate::audio::Audio::silent());
+        app.term = (80, 24);
+        app.start(Kind::Campaign(0));
+        app.message = None;
+        let t = text(&app, 80, 24);
+        let last = t.lines().nth(23).unwrap();
+        assert!(last.contains("Esc back"), "key line cut: {last}");
     }
 }

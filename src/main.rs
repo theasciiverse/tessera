@@ -76,6 +76,10 @@ fn main() -> io::Result<()> {
     let audio = audio::Audio::new(store.muted || has("--mute"));
     log::info!("start version {} seed {seed} audio {} muted {} store {store:?}", env!("CARGO_PKG_VERSION"), audio.available(), audio.muted);
     let mut app = App::new(store, seed, audio);
+    // the terminal's size before any maze starts, so it starts in a view that fits
+    if let Ok((w, h)) = ratatui::crossterm::terminal::size() {
+        app.term = (w, h);
+    }
     if has("--fog") {
         app.store.fog = true;
     }

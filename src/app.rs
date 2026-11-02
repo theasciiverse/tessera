@@ -156,6 +156,7 @@ impl App {
         self.run = Some(Run::new(maze, fog));
         self.kind = kind;
         self.view = 0;
+        self.fit_view(dims);
         self.load_ghost();
         self.paused = false;
         self.result = None;
@@ -436,6 +437,23 @@ impl App {
         self.result = Some((best, before));
     }
 
+    /// If the usual view does not fit the terminal but another does, start
+    /// in that one.
+    fn fit_view(&mut self, dims: [usize; 4]) {
+        let fits = |v: &View| {
+            let (w, h) = crate::render::needed(v.dims(dims));
+            w <= self.term.0 && h <= self.term.1
+        };
+        if fits(&VIEWS[0]) {
+            return;
+        }
+        if let Some(i) = VIEWS.iter().position(fits) {
+            self.view = i;
+            log::info!("view {i} to fit {}x{}", self.term.0, self.term.1);
+            self.say(format!("Turned to view {} to fit the terminal (V turns it)", i + 1));
+        }
+    }
+
     pub fn view(&self) -> View {
         VIEWS[self.view]
     }
@@ -603,5 +621,16 @@ mod tests {
         assert_eq!(a.view, 1);
         a.start(Kind::Endless(0));
         assert_eq!(a.view, 0);
+    }
+
+    #[test]
+    fn a_maze_too_tall_for_the_terminal_starts_turned() {
+        let mut a = app();
+        a.term = (80, 24);
+        a.start(Kind::Campaign(2)); // 4x4x1x3: 31 rows in the usual view
+        assert_ne!(a.view, 0);
+        let r = a.run.as_ref().unwrap();
+        let (w, h) = crate::render::needed(a.view().dims(r.maze.dims));
+        assert!(w <= 80 && h <= 24);
     }
 }

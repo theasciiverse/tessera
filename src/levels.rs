@@ -137,4 +137,22 @@ mod curve {
             println!("{:>2} {:<16} {:?} cells {:>3} path {:>3} forks {:>2} steps-through {:>2} fog {}", i + 1, l.name, l.dims, m.len(), path.len(), forks, through, l.fog);
         }
     }
+
+    /// Which campaign levels can be played at 80x24 in some view.
+    #[test]
+    #[ignore]
+    fn fits_eighty_by_twenty_four() {
+        for (i, l) in CAMPAIGN.iter().enumerate() {
+            let views: Vec<usize> = crate::view::VIEWS
+                .iter()
+                .enumerate()
+                .filter(|(_, v)| {
+                    let (w, h) = crate::render::needed(v.dims(l.dims));
+                    w <= 80 && h <= 24
+                })
+                .map(|(k, _)| k + 1)
+                .collect();
+            println!("{:>2} {:<16} {:?} views that fit 80x24: {views:?}", i + 1, l.name, l.dims);
+        }
+    }
 }

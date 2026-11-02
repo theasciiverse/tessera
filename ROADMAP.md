@@ -51,6 +51,14 @@ rule: 1.0.0 when everything planned below is in.
 - The campaign's difficulty curve measured (path, forks, steps through
   per level; `cargo test campaign_curve -- --ignored --nocapture`)
 
+## 0.6.0: built
+
+- A maze that does not fit the terminal in the usual view starts in one
+  that does, and says so; when none fits, the message offers V if
+  another view would. At 80×24 the first six campaign mazes play
+- A test drives every screen with 20,000 random commands at random
+  terminal sizes: no panics, no step off the grid or through a wall
+
 ## Next
 
 - A map view for small terminals: one character per cell in half blocks,
