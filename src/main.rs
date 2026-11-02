@@ -5,6 +5,7 @@ mod maze;
 mod render;
 mod rng;
 mod store;
+mod view;
 
 use app::{App, Cmd, Kind, Screen};
 use maze::Dir;
@@ -27,9 +28,12 @@ Arrows or WASD walk inside a slice. J and L step to the slice on the
 left or right, I and K to the slice above or below (or Shift with the
 arrows). In a cell, cyan ◂ ▸ ↔ mark a way through to the slices left and
 right, amber ▴ ▾ ↕ to the slices above and below.
+V (or Tab) turns the maze: any two of the four directions can be the
+slices, six views of the same maze; walking follows the screen.
 H shows the next steps (+10 s), P pauses, R restarts, Esc goes back.
 Gamepad: left stick or d-pad walk, right stick or face buttons step
-between slices, LB hints, Start pauses, Back goes back.
+between slices, the triggers turn the maze, LB hints, Start pauses,
+Back goes back.
 
   --daily         today's daily maze, the same for everyone
   --level N       campaign maze N (1 to 12)
@@ -130,7 +134,10 @@ fn run(terminal: &mut ratatui::DefaultTerminal, app: &mut App, pads: &mut Pads) 
         }
         app.tick();
         if Instant::now() >= next_frame {
-            terminal.draw(|f| render::draw(app, f.area(), f.buffer_mut()))?;
+            terminal.draw(|f| {
+                app.term = (f.area().width, f.area().height);
+                render::draw(app, f.area(), f.buffer_mut())
+            })?;
             next_frame = Instant::now() + FRAME;
         }
         if snapshot.elapsed() >= SNAPSHOT_EVERY {
@@ -184,6 +191,7 @@ fn key_cmd(app: &App, k: KeyEvent) -> Option<Cmd> {
         (_, Some('p')) => Some(Cmd::Pause),
         (_, Some('r')) => Some(Cmd::Restart),
         (_, Some('n')) => Some(Cmd::NewMaze),
+        (_, Some('v')) | (KeyCode::Tab, _) => Some(Cmd::Turn),
         (KeyCode::Enter, _) | (_, Some(' ')) => Some(Cmd::Confirm),
         (KeyCode::Esc | KeyCode::Backspace, _) | (_, Some('q')) => Some(Cmd::Back),
         _ => None,
@@ -327,6 +335,7 @@ fn pad_cmd(app: &App, h: Held) -> Option<Cmd> {
         Held::Button(North) | Held::Stick(Axis::RightStickY, 1) => Some(Cmd::Move(Dir::WMINUS)),
         Held::Button(South) | Held::Stick(Axis::RightStickY, -1) => Some(Cmd::Move(Dir::WPLUS)),
         Held::Button(LeftTrigger) => Some(Cmd::Hint),
+        Held::Button(LeftTrigger2 | RightTrigger2) => Some(Cmd::Turn),
         Held::Button(RightTrigger) => Some(Cmd::Restart),
         Held::Button(Start) => Some(Cmd::Pause),
         Held::Button(Select) => Some(Cmd::Back),

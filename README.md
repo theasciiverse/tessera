@@ -13,6 +13,11 @@ slice, and lights up where a step through would land.
 Get from the top left corner of the first slice to the pink `◆` in the
 bottom right corner of the last.
 
+Press V to turn the maze. Any two of its four directions can be the
+slices and the other two lay them out, so every maze can be seen six
+ways; a way that winds through many slices in one view may run straight
+in another. Walking always follows the screen.
+
 ```
 ╭───────┬───┬───╮   ╭───────────────╮
 │▸@  ·  │▸  │ ·▾│   │↔○    ▸     ▾  │
@@ -40,11 +45,12 @@ cargo run --release -- --help           # everything else
 
 Arrows or WASD walk inside a slice. J and L step to the slice on the left
 or right, I and K to the slice above or below (Shift with the arrows does
-the same). H shows the next steps of the way and adds ten seconds. P
-pauses, R starts over, Esc goes back.
+the same). V or Tab turns the maze. H shows the next steps of the way
+and adds ten seconds. P pauses, R starts over, Esc goes back.
 
 Gamepad: left stick or d-pad walk, right stick or the face buttons step
-between slices, LB hints, Start pauses, Back goes back.
+between slices, the triggers turn the maze, LB hints, Start pauses, Back
+goes back.
 
 The bigger mazes need a bigger terminal (the largest about 93×37); the
 game says so when a maze does not fit.

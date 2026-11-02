@@ -6,7 +6,7 @@ bleuje.com/4dmaze). Ours, written from scratch: the 4D maze shown as a
 grid of 2D slices is the genre's way of drawing it; name, controls,
 marks, structure and code are our own, credited "after bleuje's 4D maze".
 
-**Status:** 0.1.0, playable. Own git repo, folder `games/tessera`, private at
+**Status:** 0.2.0, playable. Own git repo, folder `games/tessera`, private at
 github.com/theasciiverse/tessera. What comes next is in `ROADMAP.md`.
 
 ## Model (src/maze.rs)
@@ -30,6 +30,16 @@ tried on paper and dropped: avt has no underline colour (SGR 58), so in
 casts the underline takes each character's colour. Cell = z mark, core,
 w mark. The campaign fits 100×40 (a test checks); the game says when a
 maze needs a bigger terminal.
+
+## Views (src/view.rs)
+
+Six views, one per pair of axes inside the slices: a permutation from
+screen axes (across a slice, down it, across the slices, down them) to
+maze axes. The renderer draws through `Shown` (render.rs), which turns
+positions and directions, so slice and cell drawing think only in screen
+axes; `Cmd::Move` carries a screen direction that the app turns with
+`View::dir`. Turning skips views that need more than the terminal
+(`App::term`, set on every draw). A new maze starts in view 1.
 
 ## Notes
 

@@ -18,11 +18,18 @@ rule: 1.0.0 when everything planned below is in.
 - Watch mode: the way through walked by the computer
 - Keyboard and gamepads; session logging
 
+## 0.2.0: built
+
+- Turn the maze (V or Tab, the gamepad's triggers): any two of the four
+  axes can be the slices and the other two lay them out, six views of the
+  same maze; walking follows the screen, the status line names the view,
+  and only views that fit the terminal come up
+- Watch mode walks 4×4×3×2 mazes and turns them a third and two thirds
+  of the way through
+
 ## Next
 
 - Sound: soft steps, a chime for stepping through, a bump at walls
 - A compact view (one row per cell) so the largest mazes fit 80×24
-- Turn the view: choose which two axes are the slices and which two are
-  laid out, so the same maze can be seen four ways
 - Replay your best run as a ghost beside you
 - Five dimensions as the last campaign chapter

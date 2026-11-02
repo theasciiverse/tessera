@@ -4,6 +4,7 @@ use crate::game::{fmt_time, Run};
 use crate::levels::{self, CAMPAIGN, ENDLESS};
 use crate::maze::{Dir, Maze};
 use crate::store::Store;
+use crate::view::{View, VIEWS};
 use std::time::{Duration, Instant};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -38,6 +39,8 @@ pub enum Cmd {
     Restart,
     NewMaze,
     Fog,
+    /// the next view that fits
+    Turn,
     Quit,
 }
 
@@ -50,6 +53,7 @@ pub struct App {
     pub screen: Screen,
     pub store: Store,
     pub cursor: usize,
+    pub help_page: usize,
     pub campaign_cursor: usize,
     pub endless_cursor: usize,
     pub run: Option<Run>,
@@ -64,6 +68,12 @@ pub struct App {
     pub result: Option<(bool, Option<u64>)>,
     watch_next: Instant,
     watch_path: Vec<Dir>,
+    /// the watch walk's length, for turning the view a third and two thirds in
+    watch_len: usize,
+    /// which of the six views the maze is drawn in (crate::view)
+    pub view: usize,
+    /// the terminal's size, so turning only picks views that fit
+    pub term: (u16, u16),
 }
 
 impl App {
@@ -73,6 +83,7 @@ impl App {
             screen: Screen::Title,
             store,
             cursor: 0,
+            help_page: 0,
             campaign_cursor,
             endless_cursor: 1,
             run: None,
@@ -85,6 +96,9 @@ impl App {
             result: None,
             watch_next: Instant::now(),
             watch_path: Vec::new(),
+            watch_len: 0,
+            view: 0,
+            term: (100, 40),
         }
     }
 
@@ -116,7 +130,7 @@ impl App {
             }
             Kind::Watch => {
                 self.seed = crate::rng::Rng::new(self.seed).next();
-                ([5, 5, 3, 2], self.seed, false)
+                ([4, 4, 3, 2], self.seed, false)
             }
         };
         log::info!("start {kind:?} dims {dims:?} seed {seed} fog {fog}");
@@ -124,10 +138,12 @@ impl App {
         if kind == Kind::Watch {
             self.watch_path = maze.path_to_goal(maze.start);
             self.watch_path.reverse();
+            self.watch_len = self.watch_path.len();
             self.watch_next = Instant::now() + Duration::from_millis(1200);
         }
         self.run = Some(Run::new(maze, fog));
         self.kind = kind;
+        self.view = 0;
         self.paused = false;
         self.result = None;
         self.message = None;
@@ -170,6 +186,12 @@ impl App {
                     self.watch_next = Instant::now() + WATCH_STEP;
                     if r.finished.is_some() {
                         self.watch_next = Instant::now() + Duration::from_millis(3000);
+                    }
+                    // turn the maze a third and two thirds of the way in
+                    let left = self.watch_path.len();
+                    if self.watch_len >= 9 && (left == self.watch_len * 2 / 3 || left == self.watch_len / 3) {
+                        self.turn();
+                        self.watch_next = Instant::now() + Duration::from_millis(900);
                     }
                 }
             }
@@ -227,11 +249,15 @@ impl App {
                 Cmd::Back => self.screen = Screen::Title,
                 _ => {}
             },
-            Screen::Help => {
-                if matches!(cmd, Cmd::Back | Cmd::Confirm) {
+            Screen::Help => match cmd {
+                Cmd::Right | Cmd::Down | Cmd::Confirm if self.help_page == 0 => self.help_page = 1,
+                Cmd::Left | Cmd::Up if self.help_page == 1 => self.help_page = 0,
+                Cmd::Back | Cmd::Confirm => {
+                    self.help_page = 0;
                     self.screen = Screen::Title;
                 }
-            }
+                _ => {}
+            },
             Screen::Play => self.play_cmd(cmd),
         }
     }
@@ -263,6 +289,7 @@ impl App {
                 return;
             }
             Cmd::Restart => return self.restart(),
+            Cmd::Turn => return self.turn(),
             Cmd::NewMaze => {
                 if let Kind::Endless(_) | Kind::Watch = self.kind {
                     let k = self.kind.clone();
@@ -294,7 +321,8 @@ impl App {
         let Some(r) = &mut self.run else { return };
         match cmd {
             Cmd::Move(d) => {
-                let went = r.go(d);
+                // d is a direction on screen; the view says which in the maze
+                let went = r.go(VIEWS[self.view].dir(d));
                 log::debug!("move {} {} pos {:?} moves {}", d.name(), if went { "ok" } else { "wall" }, r.pos, r.moves);
                 if !went && d.axis() >= 2 {
                     let msg = match d {
@@ -336,6 +364,31 @@ impl App {
         self.result = Some((best, before));
     }
 
+    pub fn view(&self) -> View {
+        VIEWS[self.view]
+    }
+
+    /// Turns the maze to the next view that fits the terminal.
+    fn turn(&mut self) {
+        let Some(r) = &self.run else { return };
+        let dims = r.maze.dims;
+        let fits = |v: &View| {
+            let (w, h) = crate::render::needed(v.dims(dims));
+            w <= self.term.0 && h <= self.term.1
+        };
+        let next = (1..VIEWS.len()).map(|k| (self.view + k) % VIEWS.len()).find(|&i| fits(&VIEWS[i]));
+        match next {
+            Some(i) => {
+                self.view = i;
+                let v = VIEWS[i];
+                log::info!("view {} ({})", i, v.name());
+                let n = |k: usize| crate::view::AXIS_NAMES[v.0[k]];
+                self.say(format!("View {}: {} and {} inside the slices, {} across, {} down", i + 1, n(0), n(1), n(2), n(3)));
+            }
+            None => self.say("No other view fits this terminal".into()),
+        }
+    }
+
     pub fn say(&mut self, s: String) {
         self.message = Some((s, Instant::now() + Duration::from_millis(1800)));
     }
@@ -343,8 +396,9 @@ impl App {
     pub fn snapshot(&self) -> String {
         match &self.run {
             Some(r) if self.screen == Screen::Play => format!(
-                "{:?} {} pos {:?} moves {} hints {} time {} paused {} left {}",
+                "{:?} {} view {} pos {:?} moves {} hints {} time {} paused {} left {}",
                 self.kind,
+                self.view,
                 self.key(),
                 r.pos,
                 r.moves,
@@ -413,5 +467,49 @@ mod tests {
         let mut b = App::new(Store::default(), 999);
         b.start(Kind::Daily("2026-11-02".into()));
         assert_eq!(p1, b.run.as_ref().unwrap().maze.path_to_goal([0; 4]));
+    }
+
+    #[test]
+    fn turning_keeps_you_in_place_and_moves_follow_the_screen() {
+        let mut a = app();
+        a.term = (200, 60);
+        a.start(Kind::Daily("2026-11-02".into()));
+        let before = a.run.as_ref().unwrap().pos;
+        a.apply(Cmd::Turn);
+        assert_eq!(a.view, 1);
+        assert_eq!(a.run.as_ref().unwrap().pos, before);
+        // in view 1 (x z inside, y w laid out) "down" on screen is +z
+        let r = a.run.as_ref().unwrap();
+        let down_ok = r.maze.is_open(r.pos, Dir::ZPLUS);
+        a.apply(Cmd::Move(Dir::DOWN));
+        let after = a.run.as_ref().unwrap().pos;
+        assert_eq!(after != before, down_ok);
+        if down_ok {
+            assert_eq!(after[2], before[2] + 1);
+        }
+    }
+
+    #[test]
+    fn turning_skips_views_that_do_not_fit() {
+        let mut a = app();
+        a.term = (100, 40);
+        a.start(Kind::Campaign(10)); // 5x5x4x3
+        for _ in 0..6 {
+            a.apply(Cmd::Turn);
+            let r = a.run.as_ref().unwrap();
+            let (w, h) = crate::render::needed(a.view().dims(r.maze.dims));
+            assert!(w <= 100 && h <= 40, "view {} needs {w}x{h}", a.view);
+        }
+    }
+
+    #[test]
+    fn a_new_maze_starts_in_the_usual_view() {
+        let mut a = app();
+        a.term = (200, 60);
+        a.start(Kind::Daily("2026-11-02".into()));
+        a.apply(Cmd::Turn);
+        assert_eq!(a.view, 1);
+        a.start(Kind::Endless(0));
+        assert_eq!(a.view, 0);
     }
 }

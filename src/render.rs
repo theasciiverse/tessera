@@ -9,10 +9,11 @@ use crate::app::{App, Kind, Screen, TITLE_ITEMS};
 use crate::game::{fmt_ms, fmt_time, Run, HINT_COST};
 use crate::levels::{CAMPAIGN, ENDLESS};
 use crate::maze::{Dir, Pos};
+use crate::view::View;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 const BG: Color = Color::Rgb(8, 12, 10);
 const WALL: Color = Color::Rgb(90, 220, 130);
@@ -83,7 +84,7 @@ pub fn draw(app: &App, area: Rect, buf: &mut Buffer) {
         Screen::Title => title(app, area, buf),
         Screen::Campaign => campaign(app, area, buf),
         Screen::Endless => endless(app, area, buf),
-        Screen::Help => help(area, buf),
+        Screen::Help => help(app, area, buf),
         Screen::Play => play(app, area, buf),
     }
 }
@@ -206,46 +207,64 @@ fn endless(app: &App, area: Rect, buf: &mut Buffer) {
     center(buf, area, y + 2, "↑↓ size · ←→ or F fog · Enter play · Esc back", fg(FAINT));
 }
 
-const HELP: &[&str] = &[
-    "HOW TO PLAY",
-    "",
-    "Each maze has four dimensions. You see it as slices: every box is one",
-    "flat maze, and the boxes side by side and above and below each other",
-    "are its neighbours in the third and fourth dimensions.",
-    "",
-    "Walk from the top left corner of the top left slice to the pink ◆ in",
-    "the bottom right corner of the bottom right slice.",
-    "",
-    "Arrows or WASD walk inside a slice. J and L step to the slice on the",
-    "left or right, I and K to the slice above or below, staying in the",
-    "same place inside it.",
-    "",
-    "A cell's marks say where you can step through:",
-    "  ◂ ▸ ↔  to the slice on the left, right, or both  (J, L)",
-    "  ▴ ▾ ↕  to the slice above, below, or both        (I, K)",
-    "Your place is shown faintly in every slice; where you can step",
-    "through to, it lights up.",
-    "",
-    "H shows the next steps of the way, but adds ten seconds. P pauses,",
-    "R starts the maze over, Esc goes back.",
-    "",
-    "Gamepad: left stick or d-pad walk, right stick or the face buttons",
-    "step between slices, LB hints, Start pauses, Back goes back.",
+const HELP: [&[&str]; 2] = [
+    &[
+        "HOW TO PLAY",
+        "",
+        "Each maze has four dimensions. You see it as slices: every box is one",
+        "flat maze, and the boxes side by side and above and below each other",
+        "are its neighbours in the third and fourth dimensions.",
+        "",
+        "Walk from the top left corner of the top left slice to the pink ◆ in",
+        "the bottom right corner of the bottom right slice.",
+        "",
+        "Arrows or WASD walk inside a slice. J and L step to the slice on the",
+        "left or right, I and K to the slice above or below, staying in the",
+        "same place inside it (Shift with the arrows works too).",
+        "",
+        "A cell's marks say where you can step through:",
+        "  ◂ ▸ ↔  to the slice on the left, right, or both  (J, L)",
+        "  ▴ ▾ ↕  to the slice above, below, or both        (I, K)",
+        "Your place is shown faintly in every slice; where you can step",
+        "through to, it lights up.",
+    ],
+    &[
+        "TURNING, HINTS AND THE GAMEPAD",
+        "",
+        "V turns the maze: any two of the four directions can be the slices,",
+        "so the same maze can be seen six ways. A way that winds through many",
+        "slices in one view may run straight in another. Walking always",
+        "follows the screen.",
+        "",
+        "H shows the next steps of the way, but adds ten seconds. P pauses,",
+        "R starts the maze over, Esc goes back.",
+        "",
+        "Fog shows only what you have walked past: two campaign mazes are in",
+        "fog, and endless mazes can be.",
+        "",
+        "Gamepad: left stick or d-pad walk, right stick or the face buttons",
+        "step between slices, the triggers turn the maze, LB hints, Start",
+        "pauses, Back goes back.",
+    ],
 ];
 
-fn help(area: Rect, buf: &mut Buffer) {
-    let top = area.y + area.height.saturating_sub(HELP.len() as u16 + 2) / 2;
+fn help(app: &App, area: Rect, buf: &mut Buffer) {
+    let page = HELP[app.help_page.min(HELP.len() - 1)];
+    let top = area.y + area.height.saturating_sub(20) / 2;
     let x = area.x + area.width.saturating_sub(72) / 2;
-    for (i, l) in HELP.iter().enumerate() {
+    for (i, l) in page.iter().enumerate() {
         let st = if i == 0 { fg(AMBER).add_modifier(Modifier::BOLD) } else { fg(TEXT) };
         put(buf, x, top + i as u16, l, st);
     }
-    center(buf, area, top + HELP.len() as u16 + 1, "Esc back", fg(FAINT));
+    let foot = format!("page {} of {} · ←→ turn the page · Esc back", app.help_page + 1, HELP.len());
+    center(buf, area, top + 19, &foot, fg(FAINT));
 }
 
 fn play(app: &App, area: Rect, buf: &mut Buffer) {
     let Some(r) = &app.run else { return };
-    let dims = r.maze.dims;
+    let view = app.view();
+    let sh = Shown { r, v: view };
+    let dims = sh.dims();
     let (nw, nh) = needed(dims);
     if area.width < nw || area.height < nh {
         let mid = area.y + area.height / 2;
@@ -257,7 +276,11 @@ fn play(app: &App, area: Rect, buf: &mut Buffer) {
     // status line
     let status_y = area.y;
     put(buf, area.x + 1, status_y, "TESSERA", fg(AMBER).add_modifier(Modifier::BOLD));
-    put(buf, area.x + 10, status_y, &app.title(), fg(TEXT));
+    let mut title = app.title();
+    if app.view != 0 {
+        title.push_str(&format!(" · view {}: {}", app.view + 1, view.name()));
+    }
+    put(buf, area.x + 10, status_y, &title, fg(TEXT));
     let mut right = format!("{}   {} move{}", fmt_time(r.elapsed()), r.moves, if r.moves == 1 { "" } else { "s" });
     if r.hints > 0 {
         right.push_str(&format!("   {} hint{}", r.hints, if r.hints == 1 { "" } else { "s" }));
@@ -269,12 +292,12 @@ fn play(app: &App, area: Rect, buf: &mut Buffer) {
     let ox = area.x + area.width.saturating_sub(mw) / 2;
     let oy = area.y + 2 + (area.height - 4).saturating_sub(mh) / 2;
     let sw = CELL_W * dims[0] as u16 + 1;
-    let sh = 2 * dims[1] as u16 + 1;
+    let slice_h = 2 * dims[1] as u16 + 1;
     for w in 0..dims[3] {
         for z in 0..dims[2] {
             let sx = ox + z as u16 * (sw + GAP_X);
-            let sy = oy + w as u16 * (sh + GAP_Y);
-            slice(r, z, w, sx, sy, buf);
+            let sy = oy + w as u16 * (slice_h + GAP_Y);
+            slice(&sh, z, w, sx, sy, buf);
         }
     }
 
@@ -285,7 +308,7 @@ fn play(app: &App, area: Rect, buf: &mut Buffer) {
     } else if app.kind == Kind::Watch {
         center(buf, area, foot, "Watching the way through · N another maze · Esc back", fg(FAINT));
     } else {
-        center(buf, area, foot, "←↑↓→ walk · J L ◂▸ slices · I K ▴▾ slices · H hint · P pause · R restart · Esc back", fg(FAINT));
+        center(buf, area, foot, "←↑↓→ walk · J L ◂▸ · I K ▴▾ slices · V turn · H hint · P pause · R restart · Esc back", fg(FAINT));
     }
 
     if app.paused {
@@ -362,27 +385,67 @@ fn corner(u: bool, d: bool, l: bool, r: bool) -> &'static str {
     }
 }
 
-fn slice(r: &Run, z: usize, w: usize, sx: u16, sy: u16, buf: &mut Buffer) {
-    let m = &r.maze;
-    let [nx, ny, _, _] = m.dims;
-    let here = r.pos[2] == z && r.pos[3] == w;
+/// The run as the screen shows it: positions and directions turned by the
+/// view, so the drawing below only ever thinks in screen axes.
+struct Shown<'a> {
+    r: &'a Run,
+    v: View,
+}
+
+impl Shown<'_> {
+    fn dims(&self) -> [usize; 4] {
+        self.v.dims(self.r.maze.dims)
+    }
+    fn open(&self, q: Pos, d: Dir) -> bool {
+        self.r.maze.is_open(self.v.to_maze(q), self.v.dir(d))
+    }
+    fn step(&self, q: Pos, d: Dir) -> Option<Pos> {
+        self.r.maze.step(self.v.to_maze(q), self.v.dir(d)).map(|p| self.v.to_screen(p))
+    }
+    fn pos(&self) -> Pos {
+        self.v.to_screen(self.r.pos)
+    }
+    fn goal(&self) -> Pos {
+        self.v.to_screen(self.r.maze.goal)
+    }
+    fn index(&self, q: Pos) -> usize {
+        self.r.maze.index(self.v.to_maze(q))
+    }
+    fn seen(&self, q: Pos) -> bool {
+        !self.r.fog || self.r.seen[self.index(q)]
+    }
+    fn trail(&self, q: Pos) -> bool {
+        self.r.trail[self.index(q)]
+    }
+    fn hinted(&self, q: Pos) -> bool {
+        let p = self.v.to_maze(q);
+        self.r.hint.as_ref().is_some_and(|(cells, _)| cells.contains(&p))
+    }
+    /// a recent move into a wall, in screen terms
+    fn bump(&self) -> Option<(Pos, Dir)> {
+        self.r.bump.filter(|(_, _, t)| t.elapsed() < BUMP_FOR).map(|(p, d, _)| (self.v.to_screen(p), self.v.screen_dir(d)))
+    }
+}
+
+fn slice(sh: &Shown, z: usize, w: usize, sx: u16, sy: u16, buf: &mut Buffer) {
+    let [nx, ny, _, _] = sh.dims();
+    let me = sh.pos();
+    let here = me[2] == z && me[3] == w;
     let at = |x: usize, y: usize| -> Pos { [x, y, z, w] };
-    let seen = |x: usize, y: usize| !r.fog || r.seen[m.index(at(x, y))];
-    let now = Instant::now();
-    let bump = r.bump.filter(|(_, _, t)| now.duration_since(*t) < BUMP_FOR);
+    let bump = sh.bump();
 
     // walls: horizontal between rows yb-1 and yb at column x, vertical
     // between columns xb-1 and xb at row y; (is there, is it the bump)
     let hwall = |x: usize, yb: usize| -> (bool, bool) {
-        let wall = yb == 0 || yb == ny || !m.is_open(at(x, yb - 1), Dir::DOWN);
-        let visible = (yb > 0 && seen(x, yb - 1)) || (yb < ny && seen(x, yb));
-        let hit = bump.is_some_and(|(p, d, _)| p[2] == z && p[3] == w && p[0] == x && ((d == Dir::UP && p[1] == yb) || (d == Dir::DOWN && p[1] + 1 == yb)));
+        let wall = yb == 0 || yb == ny || !sh.open(at(x, yb - 1), Dir::DOWN);
+        let visible = (yb > 0 && sh.seen(at(x, yb - 1))) || (yb < ny && sh.seen(at(x, yb)));
+        let hit = bump.is_some_and(|(p, d)| p[2] == z && p[3] == w && p[0] == x && ((d == Dir::UP && p[1] == yb) || (d == Dir::DOWN && p[1] + 1 == yb)));
         (wall && visible, hit)
     };
     let vwall = |xb: usize, y: usize| -> (bool, bool) {
-        let wall = xb == 0 || xb == nx || !m.is_open(at(xb - 1, y), Dir::RIGHT);
-        let visible = (xb > 0 && seen(xb - 1, y)) || (xb < nx && seen(xb, y));
-        let hit = bump.is_some_and(|(p, d, _)| p[2] == z && p[3] == w && p[1] == y && ((d == Dir::LEFT && p[0] == xb) || (d == Dir::RIGHT && p[0] + 1 == xb)));
+        let wall = xb == 0 || xb == nx || !sh.open(at(xb - 1, y), Dir::RIGHT);
+        let visible = (xb > 0 && sh.seen(at(xb - 1, y))) || (xb < nx && sh.seen(at(xb, y)));
+        let hit = bump.is_some_and(|(p, d)| p[2] == z && p[3] == w && p[1] == y && ((d == Dir::LEFT && p[0] == xb) || (d == Dir::RIGHT && p[0] + 1 == xb)));
         (wall && visible, hit)
     };
     let wall_st = fg(if here { WALL } else { WALL_DIM });
@@ -409,22 +472,19 @@ fn slice(r: &Run, z: usize, w: usize, sx: u16, sy: u16, buf: &mut Buffer) {
             put(buf, sx + CELL_W * xb as u16, row, if on { "│" } else { " " }, if hit { fg(BUMP) } else { wall_st });
         }
         for x in 0..nx {
-            let p = at(x, y);
             let cx = sx + CELL_W * x as u16 + 1;
-            cell(r, p, cx, row, buf, here);
+            cell(sh, at(x, y), cx, row, buf, here);
         }
     }
 }
 
-fn cell(r: &Run, p: Pos, cx: u16, row: u16, buf: &mut Buffer, here: bool) {
-    let m = &r.maze;
-    let i = m.index(p);
-    if r.fog && !r.seen[i] {
+fn cell(sh: &Shown, q: Pos, cx: u16, row: u16, buf: &mut Buffer, here: bool) {
+    if !sh.seen(q) {
         put(buf, cx, row, "░░░", fg(FOG));
         return;
     }
     let dim = |c: Color| if here { c } else { blend(c, BG, 0.45) };
-    let open = |d: Dir| m.is_open(p, d);
+    let open = |d: Dir| sh.open(q, d);
     let zm = match (open(Dir::ZMINUS), open(Dir::ZPLUS)) {
         (true, true) => "↔",
         (true, false) => "◂",
@@ -440,30 +500,30 @@ fn cell(r: &Run, p: Pos, cx: u16, row: u16, buf: &mut Buffer, here: bool) {
     put(buf, cx, row, zm, fg(dim(ZC)));
     put(buf, cx + 2, row, wm, fg(dim(WC)));
 
-    // a step into the hidden dimensions that hit nothing: mark it on you
-    if let Some((bp, d, t)) = r.bump {
-        if bp == p && d.axis() >= 2 && t.elapsed() < BUMP_FOR {
+    let me = sh.pos();
+    // a step across the slices that hit nothing: mark it on you
+    if let Some((bp, d)) = sh.bump() {
+        if bp == q && d.axis() >= 2 {
             put(buf, if d.axis() == 2 { cx } else { cx + 2 }, row, "×", fg(BUMP));
         }
     }
 
-    let hinted = r.hint.as_ref().is_some_and(|(cells, _)| cells.contains(&p));
-    let ghost = !here && p[0] == r.pos[0] && p[1] == r.pos[1];
-    let (ch, st) = if p == r.pos {
+    let ghost = !here && q[0] == me[0] && q[1] == me[1];
+    let (ch, st) = if q == me {
         ("@", fg(ME).add_modifier(Modifier::BOLD))
-    } else if hinted {
+    } else if sh.hinted(q) {
         ("•", fg(HINT).add_modifier(Modifier::BOLD))
-    } else if p == m.goal {
+    } else if q == sh.goal() {
         ("◆", fg(if here { GOAL } else { blend(GOAL, BG, 0.25) }).add_modifier(Modifier::BOLD))
     } else if ghost {
-        // where a step through the hidden dimensions would land
-        let reach = Dir::ALL[4..].iter().find(|&&d| m.step(r.pos, d) == Some(p));
+        // where a step across the slices would land
+        let reach = Dir::ALL[4..].iter().find(|&&d| sh.step(me, d) == Some(q));
         match reach {
             Some(d) if d.axis() == 2 => ("○", fg(ZC).add_modifier(Modifier::BOLD)),
             Some(_) => ("○", fg(WC).add_modifier(Modifier::BOLD)),
             None => ("∙", fg(GHOST)),
         }
-    } else if r.trail[m.index(p)] {
+    } else if sh.trail(q) {
         ("·", fg(dim(TRAIL)))
     } else {
         (" ", fg(BG))
@@ -542,6 +602,16 @@ mod tests {
         app.screen = Screen::Endless;
         println!("{}", text(&app, 100, 30));
         app.screen = Screen::Help;
-        println!("{}", text(&app, 100, 30));
+        println!("{}", text(&app, 80, 24));
+        app.help_page = 1;
+        println!("{}", text(&app, 80, 24));
+    }
+
+    #[test]
+    fn help_pages_fit_eighty_by_twenty_four() {
+        for page in HELP {
+            assert!(page.len() <= 19, "a help page has {} lines", page.len());
+            assert!(page.iter().all(|l| l.chars().count() <= 72));
+        }
     }
 }
