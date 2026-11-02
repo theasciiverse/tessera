@@ -6,7 +6,7 @@ bleuje.com/4dmaze). Ours, written from scratch: the 4D maze shown as a
 grid of 2D slices is the genre's way of drawing it; name, controls,
 marks, structure and code are our own, credited "after bleuje's 4D maze".
 
-**Status:** 0.1.0, playable. Own git repo, folder `games/tessera`, to be
+**Status:** 0.1.0, playable. Own git repo, folder `games/tessera`, private at
 github.com/theasciiverse/tessera. What comes next is in `ROADMAP.md`.
 
 ## Model (src/maze.rs)
