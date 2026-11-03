@@ -59,6 +59,12 @@ rule: 1.0.0 when everything planned below is in.
 - A test drives every screen with 20,000 random commands at random
   terminal sizes: no panics, no step off the grid or through a wall
 
+## 0.6.1: built
+
+- [x] Gamepads work on Windows: gilrs reads them through XInput, since its
+  default (Windows Gaming Input) only reports to a program with a focused
+  window of its own, which a terminal game never has
+
 ## Next
 
 - A map view for small terminals: one character per cell in half blocks,
